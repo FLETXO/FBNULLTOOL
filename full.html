@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🔥 Firebase Power Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #0f0f0f, #1a1a1a);
+      color: #f4f4f4;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 30px;
+      margin: 0;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      padding: 12px 25px;
+      margin: 0 5px;
+      border: none;
+      border-radius: 8px;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: #00fca8;
+      color: #000;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+      max-width: 600px;
+      margin: auto;
+      background: #1e1e1e;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 12px rgba(0,255,180,0.1);
+    }
+    .tab-content.active {
+      display: block;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      background: #222;
+      border: 1px solid #555;
+      border-radius: 6px;
+      color: #fff;
+    }
+    button {
+      background: #00fca8;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #00c78f;
+    }
+    textarea {
+      font-family: monospace;
+    }
+    p#error, p#authStatus, p#dbStatus {
+      margin-top: 10px;
+      font-weight: bold;
+      color: #f66;
+    }
+    h2 {
+      text-align: center;
+      color: #00fca8;
+    }
+    #dbTab button {
+  width: 48%;
+  display: inline-block;
+  margin: 5px 1%;
+}
+
+#jsonInput {
+  height: 400px;
+  resize: vertical;
+}
+
+#path {
+  margin-bottom: 4px;
+  margin-top: 10px;
+}
+  </style>
+</head>
+<body>
+  <h2>🔥 Firebase Power Tool</h2>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('authTab')">🔐 Auth</button>
+    <button class="tab-btn" onclick="switchTab('dbTab')">📂 DB Tools</button>
+  </div>
+
+  <!-- 🔐 Auth Tab -->
+  <div id="authTab" class="tab-content active">
+    <h3>⚙️ Firebase Config</h3>
+    <input id="apiKey" placeholder="API Key">
+    <input id="databaseURL" placeholder="Database URL">
+    <input id="appId" placeholder="App ID (e.g., 1:xxx:web:xxx)">
+    <input id="storageBucket" placeholder="Storage Bucket">
+    <button onclick="initFirebase()">🚀 Init Firebase</button>
+    <p id="error"></p>
+
+    <h3>🔐 Signup or Login</h3>
+    <input id="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+    <button onclick="signupUser()">📤 Signup</button>
+    <button onclick="loginUser()">🔑 Login</button>
+    <p id="authStatus"></p>
+  </div>
+
+  <!-- 📂 DB Tab -->
+  <div id="dbTab" class="tab-content">
+<h3>📂 Firebase DB Tools</h3>
+<input id="path" placeholder="Path (default: /users/UID)">
+<textarea id="jsonInput" placeholder="Edit JSON here..."></textarea>
+<div>
+  <button onclick="readData()">📥 Read</button>
+  <button onclick="writeData()">📤 Write</button>
+</div>
+<p id="dbStatus"></p>
+  </div>
+
+  <script>
+    let db, auth, currentUID = "";
+
+    window.onload = () => {
+      ['apiKey', 'databaseURL', 'appId', 'storageBucket', 'email', 'password'].forEach(id => {
+        if (localStorage.getItem(id)) {
+          document.getElementById(id).value = localStorage.getItem(id);
+        }
+      });
+    };
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function save(id) {
+      const val = document.getElementById(id).value.trim();
+      localStorage.setItem(id, val);
+      return val;
+    }
+
+    function showError(msg) {
+      document.getElementById('error').innerText = msg;
+    }
+
+    function initFirebase() {
+      const apiKey = save('apiKey');
+      const dbURL = save('databaseURL');
+      const appId = save('appId');
+      const bucket = save('storageBucket');
+
+      if (!apiKey || !dbURL || !appId || !bucket) {
+        showError("❌ All Firebase config fields are required");
+        return;
+      }
+
+      try {
+        const projectId = dbURL.split("//")[1].split(".")[0];
+        const senderId = appId.split(":")[1];
+
+        const config = {
+          apiKey,
+          authDomain: projectId + ".firebaseapp.com",
+          databaseURL: dbURL,
+          projectId,
+          storageBucket: bucket,
+          messagingSenderId: senderId,
+          appId
+        };
+
+        firebase.initializeApp(config);
+        auth = firebase.auth();
+        db = firebase.database();
+        showError("✅ Firebase Initialized Successfully!");
+      } catch (err) {
+        showError("❌ Firebase Init Error: " + err.message);
+      }
+    }
+
+    function signupUser() {
+      const email = save('email');
+      const pass = save('password');
+
+      auth.createUserWithEmailAndPassword(email, pass)
+        .then(() => {
+          currentUID = auth.currentUser.uid;
+          return db.ref("users/" + currentUID).set({
+            email: email,
+            registeredAt: new Date().toISOString()
+          });
+        })
+        .then(() => {
+          document.getElementById("authStatus").innerText = "✅ Signed up as: " + currentUID;
+        })
+        .catch(err => {
+          document.getElementById("authStatus").innerText = "❌ Signup error: " + err.message;
+        });
+    }
+
+    function loginUser() {
+      const email = save('email');
+      const pass = save('password');
+
+      auth.signInWithEmailAndPassword(email, pass)
+        .then(() => {
+          currentUID = auth.currentUser.uid;
+          document.getElementById("authStatus").innerText = "✅ Logged in as: " + currentUID;
+        })
+        .catch(err => {
+          document.getElementById("authStatus").innerText = "❌ Login Failed: " + err.message;
+        });
+    }
+
+    function getPath() {
+      const customPath = document.getElementById("path").value.trim();
+      if (customPath) return customPath;
+      if (!currentUID) {
+        alert("❌ No user UID found");
+        return null;
+      }
+      return "users/" + currentUID;
+    }
+
+    function readData() {
+      const path = getPath();
+      if (!path) return;
+
+      db.ref(path).once("value")
+        .then(snapshot => {
+          const val = snapshot.val();
+          document.getElementById("jsonInput").value = JSON.stringify(val, null, 2);
+          document.getElementById("dbStatus").innerText = "✅ Read success from: " + path;
+        })
+        .catch(err => {
+          document.getElementById("dbStatus").innerText = "❌ Read error: " + err.message;
+        });
+    }
+
+    function writeData() {
+      const path = getPath();
+      if (!path) return;
+
+      try {
+        const data = JSON.parse(document.getElementById("jsonInput").value);
+        db.ref(path).set(data)
+          .then(() => {
+            document.getElementById("dbStatus").innerText = "✅ Write success to: " + path;
+          })
+          .catch(err => {
+            document.getElementById("dbStatus").innerText = "❌ Write error: " + err.message;
+          });
+      } catch (e) {
+        document.getElementById("dbStatus").innerText = "❌ Invalid JSON Format";
+      }
+    }
+  </script>
+</body>
+</html>
